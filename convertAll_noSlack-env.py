@@ -58,9 +58,12 @@ def main():
 
         try:
             os.rename(filename, moveToPath)
+            logging.info(f'moved to post process BAK folder!')
         except Exception as e:
             logging.critical(f'{e} move error!')
             quit()
+
+        logging.info(f'DONE!')
 
 if __name__ == "__main__":
     main()
