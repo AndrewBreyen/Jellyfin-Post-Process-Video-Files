@@ -16,10 +16,11 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# setup slack client
+# setup slack client using token and channel from ENV file
 client = WebClient(token=os.environ.get("SLACK_TOKEN"))
 channel = os.environ.get("SLACK_CHANNEL")
 
+# set path directory from ENV file
 path = os.environ['SERIES_PATH']
 logging.info('path set to %s', path)
 
@@ -72,10 +73,10 @@ def main():
             "osascript -e 'mount volume \"smb://macserver.local/Live TV Jellyfin Recordings [WD2TB]\"'")
         logging.info('path mounted! continuing...')
 
-    # get all TS files on
+    # get all TS files in directory, save to ts_files array
     ts_files = []
     ts_files_raw = []
-    for root, files in os.walk(path):
+    for root, dirs, files in os.walk(path):
         for file in files:
             if file.endswith('.ts'):
                 ts_files_raw.append(file)
@@ -117,7 +118,7 @@ def main():
         logging.info('DONE Transcoding %s!', rawtrnc)
 
         # # move old file out of directory into postProcessBAK folder
-        # moveToPath = "/Volumes/Live TV Jellyfin Recordings [WD2TB]/postProcessBAK/OLDFILE_"+rawtrnc+".ts"
+        # moveToPath = "/Volumes/Live TV Jellyfin Recordings [WD2TB]/postProcessBAK/OLDFILE_" + rawtrnc + ".ts"
 
         # try:
         #     os.rename(filename, moveToPath)
