@@ -97,15 +97,27 @@ def main():
 
         logging.info(f'DONE Transcoding {rawtrnc}!')
 
-        # move old file out of directory into postProcessBAK folder
-        moveToPath = "/Volumes/Live TV Jellyfin Recordings [WD2TB]/postProcessBAK/OLDFILE_"+rawtrnc+".ts"
+        # # move old file out of directory into postProcessBAK folder
+        # moveToPath = "/Volumes/Live TV Jellyfin Recordings [WD2TB]/postProcessBAK/OLDFILE_"+rawtrnc+".ts"
 
+        # try:
+        #     os.rename(filename, moveToPath)
+        # except Exception as e:
+        #     errorOccurred(e)
+
+        # sendReplyMsg('Non-transcoded file moved to postProcessBAK folder', ts)
+
+        # delete non-transcoded file
         try:
-            os.rename(filename, moveToPath)
+            os.remove(filename)
         except Exception as e:
             errorOccurred(e)
 
-        sendReplyMsg('Non-transcoded file moved to postProcessBAK folder', ts)
+        logging.info(f'Removed non-transcoded file {rawtrnc}')
+        sendReplyMsg('Non-transcoded file removed', ts)
+
+
+        sendReplyMsg('Done! :party_parrot:', ts)
         addReact('white_check_mark', ts)
 
 
