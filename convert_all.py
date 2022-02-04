@@ -1,11 +1,8 @@
-"""
-Convert files in SERIES_PATH specified in .env to allow for direct playback
-"""
-
 # !/usr/bin/python3
 import os
-import logging
 import sys
+import logging
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from slack_sdk import WebClient
@@ -16,128 +13,131 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
-# setup slack client using token and channel from ENV file
+# setup slack client
 client = WebClient(token=os.environ.get("SLACK_TOKEN"))
-channel = os.environ.get("SLACK_CHANNEL")
+channel=os.environ.get("SLACK_CHANNEL")
 
-# set path directory from ENV file
-path = os.environ['SERIES_PATH']
-logging.info('path set to %s', path)
+path = os.environ.get("CONVERT_PATH")
+logging.info(f'path set to {path}')
 
+file_format = os.environ.get("FILE_FORMAT")
+file_format_length = len(file_format)
 
-def add_react(react, parent_msg_timestamp):
-    """Add reaction specified to parent message specified by timestamp"""
+##################################
+# METHODS USED FOR SLACK LOGGING #
+##################################
+
+# Adds a specified reaction (react) to a slack message specified via timestamp (ts)
+def addReact(react, ts):
     client.reactions_add(channel=channel,
-                         name=react,
-                         timestamp=parent_msg_timestamp)
+                        name=react,
+                        timestamp=ts)
 
-
-def remove_react(react, parent_msg_timestamp):
-    """Remove reaction specified to parent message specified by timestamp"""
+# Removes a specified reaction (react) to a slack message specified via timestamp (ts)
+def removeReact(react, ts):
     client.reactions_remove(channel=channel,
-                            name=react,
-                            timestamp=parent_msg_timestamp)
+                        name=react,
+                        timestamp=ts)
 
-
-def send_parent_msg(msg):
-    """Send parent Slack message"""
+# Sends a parent message with specified text (msg)
+def sendParentMsg(msg):
     return client.chat_postMessage(channel=channel, text=msg)
 
-
-def send_reply_msg(msg, parent_msg_timestamp):
-    """Send reply msg to parent message specified by timestamp"""
+# Sends a reply message with specified text (msg) to a parent message specified by timestamp (ts)
+def sendReplyMsg(msg, ts):
     client.chat_postMessage(channel=channel,
-                            thread_ts=parent_msg_timestamp,
+                            thread_ts=ts,
                             text=msg)
 
+def updateMsg(msg, ts):
+    client.chat_update(channel=channel,
+                            ts=ts,
+                            text=msg)
 
-def error_occurred(msg, parent_msg_timestamp):
-    """Add error occured reply message and add error reaction"""
+# Note that an error occurred and reply to parent message specified by timestamp (ts) with specified message (msg) 
+def errorOccurred(msg, ts):
     client.chat_postMessage(channel=channel,
-                            thread_ts=parent_msg_timestamp,
+                            thread_ts=ts,
                             text=f"ERROR: {msg}",)
-    add_react('warning', parent_msg_timestamp)
+    addReact('warning', ts)
+    
+    logging.critical(f'ERROR: {msg}')
+    quit()
 
-    logging.critical('ERROR: %s', msg)
-    sys.exit()
+
+
 
 
 def main():
-    """main method"""
     # check to see if file path exists
     if os.path.exists(path):
         logging.info('path exists, continuing')
     else:
         logging.info('path does not exist: attempting to mount...')
-        os.system(
-            "osascript -e 'mount volume \"smb://macserver.local/Live TV Jellyfin Recordings [WD2TB]\"'")
+        os.system("osascript -e 'mount volume \"smb://macserver.local/Live TV Jellyfin Recordings [WD2TB]\"'")
         logging.info('path mounted! continuing...')
 
-    # get all TS files in directory, save to ts_files array
-    ts_files = []
-    ts_files_raw = []
+    # get all files in specified format in PATH 
+    fileFormatFiles = []
+    fileFormatFilesRaw = []
     for root, dirs, files in os.walk(path):
         for file in files:
-            if file.endswith('.ts'):
-                ts_files_raw.append(file)
-                ts_files.append(os.path.join(root, file))
+            if file.endswith(file_format):
+                fileFormatFilesRaw.append(file)
+                fileFormatFiles.append(os.path.join(root, file))
+    
+    if len(fileFormatFiles)==0:
+        logging.info(f'No files found in format {file_format} to convert! exiting...')
+        quit()
 
-    if len(ts_files) == 0:
-        logging.info('No files found to convert! exiting...')
-        sys.exit()
+    logging.info(f'{len(fileFormatFiles)} Files found to convert!')
+    logging.debug(f'Files found: {fileFormatFiles}')
 
-    logging.info('%i Files found to convert!', len(ts_files))
-    logging.debug('Files found: %s', ts_files)
-
-    for i in range(len(ts_files)):
+    for i in range(len(fileFormatFiles)):
         # set params
-        rawtrnc = ts_files_raw[i][:-3]
-        filename = ts_files[i]
-        filename_mp4 = filename[:-3] + ".mp4"
+        rawtrnc = fileFormatFilesRaw[i][:-file_format_length]
+        filename = fileFormatFiles[i]
+        output_filename = filename[:-file_format_length] + ".mp4"
 
         # send slack message starting transcode
-        result = send_parent_msg(f'Starting Transcode {rawtrnc}')
-        parent_msg_timestamp = result['ts']
-        add_react('beachball', parent_msg_timestamp)
+        result = sendParentMsg(f'Starting Transcode {rawtrnc}')
+        ts=result['ts']
+        addReact('beachball', ts)
 
-        # transcode
-        logging.info('Transcoding %s', rawtrnc)
-        command = "ffmpeg -hide_banner -loglevel fatal -stats -i \"" + filename + \
-            "\" -vcodec h264_videotoolbox -b:v 3000k -acodec aac \"" + filename_mp4 + "\""
+        # record start time
+        startTime = time.time()
+
+        # transcode!
+        logging.info(f'Transcoding {rawtrnc}')
+        command = "ffmpeg -hide_banner -loglevel fatal -stats -i \"" + filename + "\" -vcodec h264_videotoolbox -b:v 3000k \"" + output_filename +"\""
         try:
             if os.system(command) != 0:
-                raise Exception(
-                    'FFMPEG has not completed successfully! Please check output of ffmpeg!')
-        except Exception as error:
-            remove_react('beachball', parent_msg_timestamp)
-            error_occurred(error, parent_msg_timestamp)
+                raise Exception('FFMPEG has not completed successfully! Please check output of ffmpeg!')
+        except Exception as e:
+            removeReact('beachball', ts)
+            errorOccurred(e, ts)
 
-        send_reply_msg('Transcode complete!', parent_msg_timestamp)
-        remove_react('beachball', parent_msg_timestamp)
+        # record end time and compute total time (rounded)
+        endTime = time.time()
+        totalTime = endTime - startTime
+        totalTime = round(totalTime, 3)
 
-        logging.info('DONE Transcoding %s!', rawtrnc)
+        # update parent slack message to say complete, reply with total time, and remove the beach ball loading reaction
+        updateMsg(f"Transcode of {rawtrnc} completed! :party_parrot:", ts)
+        sendReplyMsg(f'Completed in {totalTime} seconds!', ts)
+        removeReact('beachball', ts)
+        
+        logging.info(f'DONE! Transcode of {rawtrnc} completed in {totalTime} seconds!')
 
-        # # move old file out of directory into postProcessBAK folder
-        # moveToPath = "/Volumes/Live TV Jellyfin Recordings [WD2TB]/postProcessBAK/OLDFILE_" + rawtrnc + ".ts"
-
-        # try:
-        #     os.rename(filename, moveToPath)
-        # except Exception as error:
-        #     error_occurred(error)
-
-        # send_reply_msg('Non-transcoded file moved to postProcessBAK folder', parent_msg_timestamp)
-
-        # delete non-transcoded file
+        # move old file out of directory into postProcessBAK folder
+        moveToPath = f"{path}/OLDFILE_"+rawtrnc+".mkv"
         try:
-            os.remove(filename)
-        except Exception as error:
-            error_occurred(error, parent_msg_timestamp)
+            os.rename(filename, moveToPath)
+        except Exception as e:
+            errorOccurred(e)
 
-        logging.info('Removed non-transcoded file %s', rawtrnc)
-        send_reply_msg('Non-transcoded file removed', parent_msg_timestamp)
-
-        send_reply_msg('Done! :party_parrot:', parent_msg_timestamp)
-        add_react('white_check_mark', parent_msg_timestamp)
+        sendReplyMsg(f"Non-transcoded file renamed to {moveToPath}", ts)
+        addReact('white_check_mark', ts)
 
 
 if __name__ == "__main__":
