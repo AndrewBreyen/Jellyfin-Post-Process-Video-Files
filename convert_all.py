@@ -110,6 +110,7 @@ def main():
         # transcode!
         logging.info(f'Transcoding {rawtrnc}')
         command = "ffmpeg -hide_banner -loglevel fatal -stats -i \"" + filename + "\" -vcodec h264_videotoolbox -b:v 3000k \"" + output_filename +"\""
+        logging.debug(f'FFMPEG command: {command}')
         try:
             if os.system(command) != 0:
                 raise Exception('FFMPEG has not completed successfully! Please check output of ffmpeg!')
