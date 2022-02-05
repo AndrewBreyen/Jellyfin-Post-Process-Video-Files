@@ -1,2 +1,4 @@
 .DS_Store
 .env
+Jellyfin_Post_Process_Video_Files.egg-info/*
+build/*
