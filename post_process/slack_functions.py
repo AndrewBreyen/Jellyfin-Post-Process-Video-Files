@@ -40,7 +40,7 @@ def error_ocurred(msg, time_stamp):
     """Note that an error occurred and reply to parent message specified by timestamp (time_stamp) with specified message (msg)"""
     client.chat_postMessage(
         channel=channel,
-        thread_time_stamp=time_stamp,
+        thread_ts=time_stamp,
         text=f"ERROR: {msg}",
     )
     add_react("warning", time_stamp)
