@@ -28,7 +28,7 @@ def send_parent_message(msg):
 
 def send_reply_message(msg, time_stamp):
     """Sends a reply message with specified text (msg) to a parent message specified by timestamp (time_stamp)"""
-    client.chat_postMessage(channel=channel, thread_time_stamp=time_stamp, text=msg)
+    client.chat_postMessage(channel=channel, thread_ts=time_stamp, text=msg)
 
 
 def update_msg(msg, time_stamp):

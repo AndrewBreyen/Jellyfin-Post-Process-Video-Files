@@ -2,6 +2,7 @@
 # !/usr/bin/python3
 import os
 import logging
+import sys
 import time
 from dotenv import load_dotenv
 import ffmpeg
@@ -11,7 +12,6 @@ load_dotenv("./.env")
 
 # logging
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
-
 
 def configure():
     """Setup"""
@@ -58,7 +58,7 @@ def get_files():
                 FILE_FORMAT_FILES.append(os.path.join(root, file))
     if len(FILE_FORMAT_FILES) == 0:
         logging.info("No files found in format %s to convert! exiting...", FILE_FORMAT)
-        quit()
+        sys.exit()
 
     logging.info("%i Files found to convert!", len(FILE_FORMAT_FILES))
     logging.info("Files found: %s", FILE_FORMAT_FILES)
@@ -85,11 +85,9 @@ def transcode():
         # command = "ffmpeg -hide_banner -loglevel fatal -stats -i \"" + filename + "\" -vcodec h264_videotoolbox -b:v 3000k \"" + output_filename +"\""
         # logging.debug(f'FFMPEG command: {command}')
 
-        infile = ffmpeg.input(filename)
-
-        out = (
+        (
             ffmpeg.input(filename)
-            .output(output_filename, vcodec="h264", acodec="copy")
+            .output(output_filename, vcodec="h264_videotoolbox", acodec="copy", **{'b:v': 3000000}, loglevel="fatal")
             .run()
         )
 
@@ -117,6 +115,7 @@ def transcode():
             "DONE! Transcode of %s completed in %d seconds!", rawtrnc, total_time
         )
 
+        # TODO: change this path to move up one level to the postprocessBAK folder
         # move old file out of directory into postProcessBAK folder
         move_to_path = f"{PATH}/OLDFILE_" + rawtrnc + FILE_FORMAT
         try:
