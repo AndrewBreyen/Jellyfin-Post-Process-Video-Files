@@ -98,7 +98,7 @@ def transcode():
                 )
                 .run()
             )
-        except Exception as exception:
+        except ffmpeg.Error as exception:
             slack_functions.remove_react("beachball", timestamp)
             slack_functions.update_msg(
                 f"Error ocurred while processing `{rawtrnc}`! Please see message reply for exception details.",
