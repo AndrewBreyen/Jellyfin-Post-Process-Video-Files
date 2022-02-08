@@ -12,7 +12,7 @@ setup(
     author='Andrew Breyen',
     author_email='andrew.breyen@gmail.com',
     url='https://github.com/AndrewBreyen/Jellyfin-Post-Process-Video-Files',
-    install_requires=['slack_sdk', 'python-dotenv'],
+    install_requires=['slack_sdk', 'python-dotenv', 'ffmpeg-python'],
     packages=['post_process'],
     entry_points={
         'console_scripts': [

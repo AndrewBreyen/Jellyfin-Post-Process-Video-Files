@@ -1,46 +1,49 @@
-from slack_sdk import WebClient
+"""Functions used to send and change slack messages"""
 import logging
 import os
+import sys
 from dotenv import load_dotenv
+from slack_sdk import WebClient
 
-load_dotenv('./.env')
+load_dotenv("./.env")
 
 client = WebClient(token=os.getenv("slack_token"))
 channel = os.getenv("slack_channel")
 
-# Adds a specified reaction (react) to a slack message specified via timestamp (ts)
-def addReact(react, ts):
-    client.reactions_add(channel=channel,
-                        name=react,
-                        timestamp=ts)
 
-# Removes a specified reaction (react) to a slack message specified via timestamp (ts)
-def removeReact(react, ts):
-    client.reactions_remove(channel=channel,
-                        name=react,
-                        timestamp=ts)
+def add_react(react, time_stamp):
+    """Adds a specified reaction (react) to a slack message specified via timestamp (time_stamp)"""
+    client.reactions_add(channel=channel, name=react, timestamp=time_stamp)
 
-# Sends a parent message with specified text (msg)
-def sendParentMsg(msg):
+
+def remove_react(react, time_stamp):
+    """Removes a specified reaction (react) to a slack message specified via timestamp (time_stamp)"""
+    client.reactions_remove(channel=channel, name=react, timestamp=time_stamp)
+
+
+def send_parent_message(msg):
+    """Sends a parent message with specified text (msg)"""
     return client.chat_postMessage(channel=channel, text=msg)
 
-# Sends a reply message with specified text (msg) to a parent message specified by timestamp (ts)
-def sendReplyMsg(msg, ts):
-    client.chat_postMessage(channel=channel,
-                            thread_ts=ts,
-                            text=msg)
 
-def updateMsg(msg, ts):
-    client.chat_update(channel=channel,
-                            ts=ts,
-                            text=msg)
+def send_reply_message(msg, time_stamp):
+    """Sends a reply message with specified text (msg) to a parent message specified by timestamp (time_stamp)"""
+    client.chat_postMessage(channel=channel, thread_time_stamp=time_stamp, text=msg)
 
-# Note that an error occurred and reply to parent message specified by timestamp (ts) with specified message (msg) 
-def errorOcurred(msg, ts):
-    client.chat_postMessage(channel=channel,
-                            thread_ts=ts,
-                            text=f"ERROR: {msg}",)
-    addReact('warning', ts)
-    
-    logging.critical(f'ERROR: {msg}')
-    quit()
+
+def update_msg(msg, time_stamp):
+    """updates a message specified by timestamp to be msg"""
+    client.chat_update(channel=channel, ts=time_stamp, text=msg)
+
+
+def error_ocurred(msg, time_stamp):
+    """Note that an error occurred and reply to parent message specified by timestamp (time_stamp) with specified message (msg)"""
+    client.chat_postMessage(
+        channel=channel,
+        thread_time_stamp=time_stamp,
+        text=f"ERROR: {msg}",
+    )
+    add_react("warning", time_stamp)
+
+    logging.critical("ERROR: %s", msg)
+    sys.exit()

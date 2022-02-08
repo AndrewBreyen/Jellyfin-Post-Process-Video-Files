@@ -1,99 +1,138 @@
+"""Post-Process Files"""
 # !/usr/bin/python3
 import os
 import logging
 import time
+from dotenv import load_dotenv
+import ffmpeg
 from post_process import slack_functions
-from dotenv import load_dotenv, find_dotenv
 
-load_dotenv('./.env')
+load_dotenv("./.env")
 
 # logging
-logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
+
 
 def configure():
-    global path, file_format, file_format_length
-    path = os.getenv("convert_path")
+    """Setup"""
+    exists = os.path.isfile("./.env")
+    if exists:
+        logging.info(".env file exists!")
+    else:
+        logging.critical(
+            ".env file oes not exist! Create an .env configuration file in the root of the directory "
+        )
+        raise FileNotFoundError(".env DNE!")
 
-    logging.info(f'path set to {path}')
+    global PATH, FILE_FORMAT, FILE_FORMAT_LENGTH
+    PATH = os.getenv("convert_path")
 
-    file_format = os.getenv("file_format")
-    
-    file_format_length = len(file_format)
+    logging.info("PATH set to %s", PATH)
+
+    FILE_FORMAT = os.getenv("file_format")
+
+    FILE_FORMAT_LENGTH = len(FILE_FORMAT)
+
 
 def check_path():
-    # check to see if file path exists
-    if os.path.exists(path):
-        logging.info('path exists, continuing')
+    """Check that PATH exists"""
+    if os.path.exists(PATH):
+        logging.info("PATH exists, continuing")
     else:
-        logging.info('path does not exist: attempting to mount...')
-        os.system("osascript -e 'mount volume \"smb://macserver.local/Live TV Jellyfin Recordings [WD2TB]\"'")
-        logging.info('path mounted! continuing...')
+        logging.info("PATH does not exist: attempting to mount...")
+        os.system(
+            "osascript -e 'mount volume \"smb://macserver.local/Live TV Jellyfin Recordings [WD2TB]\"'"
+        )
+        logging.info("PATH mounted! continuing...")
+
 
 def get_files():
-    # get all files in specified format in PATH 
-    global fileFormatFiles, fileFormatFilesRaw
-    fileFormatFiles = []
-    fileFormatFilesRaw = []
-    for root, dirs, files in os.walk(path):
+    """get all files in specified format in PATH"""
+    global FILE_FORMAT_FILES, FILE_FORMAT_FILES_RAW
+    FILE_FORMAT_FILES = []
+    FILE_FORMAT_FILES_RAW = []
+    for root, dirs, files in os.walk(PATH):
         for file in files:
-            if file.endswith(file_format):
-                fileFormatFilesRaw.append(file)
-                fileFormatFiles.append(os.path.join(root, file))
-    if len(fileFormatFiles)==0:
-        logging.info(f'No files found in format {file_format} to convert! exiting...')
+            if file.endswith(FILE_FORMAT):
+                FILE_FORMAT_FILES_RAW.append(file)
+                FILE_FORMAT_FILES.append(os.path.join(root, file))
+    if len(FILE_FORMAT_FILES) == 0:
+        logging.info("No files found in format %s to convert! exiting...", FILE_FORMAT)
         quit()
 
-    logging.info(f'{len(fileFormatFiles)} Files found to convert!')
-    logging.debug(f'Files found: {fileFormatFiles}')
+    logging.info("%i Files found to convert!", len(FILE_FORMAT_FILES))
+    logging.info("Files found: %s", FILE_FORMAT_FILES)
+
 
 def transcode():
-    for i in range(len(fileFormatFiles)):
+    """for each file, transcode"""
+    for i in range(len(FILE_FORMAT_FILES)):
         # set params
-        rawtrnc = fileFormatFilesRaw[i][:-file_format_length]
-        filename = fileFormatFiles[i]
-        output_filename = filename[:-file_format_length] + ".mp4"
+        rawtrnc = FILE_FORMAT_FILES_RAW[i][:-FILE_FORMAT_LENGTH]
+        filename = FILE_FORMAT_FILES[i]
+        output_filename = filename[:-FILE_FORMAT_LENGTH] + ".mp4"
 
         # send slack message starting transcode
-        result = slack_functions.sendParentMsg(f'Starting Transcode {rawtrnc}')
-        ts=result['ts']
-        slack_functions.addReact('beachball', ts)
+        result = slack_functions.send_parent_message(f"Starting Transcode {rawtrnc}")
+        timestamp = result["ts"]
+        slack_functions.add_react("beachball", timestamp)
 
         # record start time
-        startTime = time.time()
+        start_time = time.time()
 
         # transcode!
-        logging.info(f'Transcoding {rawtrnc}')
-        command = "ffmpeg -hide_banner -loglevel fatal -stats -i \"" + filename + "\" -vcodec h264_videotoolbox -b:v 3000k \"" + output_filename +"\""
-        logging.debug(f'FFMPEG command: {command}')
+        logging.info("Transcoding %s", rawtrnc)
+        # command = "ffmpeg -hide_banner -loglevel fatal -stats -i \"" + filename + "\" -vcodec h264_videotoolbox -b:v 3000k \"" + output_filename +"\""
+        # logging.debug(f'FFMPEG command: {command}')
+
+        infile = ffmpeg.input(filename)
+
+        out = (
+            ffmpeg.input(filename)
+            .output(output_filename, vcodec="h264", acodec="copy")
+            .run()
+        )
+
         try:
-            if os.system(command) != 0:
-                raise Exception('FFMPEG has not completed successfully! Please check output of ffmpeg!')
-        except Exception as e:
-            slack_functions.removeReact('beachball', ts)
-            slack_functions.errorOcurred(e, ts)
+            # if os.system(command) != 0:
+            #     raise Exception('FFMPEG has not completed successfully! Please check output of ffmpeg!')
+            print("do something")
+        except ffmpeg.Error as exception:
+            slack_functions.remove_react("beachball", timestamp)
+            slack_functions.error_ocurred(exception, timestamp)
 
         # record end time and compute total time (rounded)
-        totalTime = round(time.time() - startTime, 3)
+        total_time = round(time.time() - start_time, 3)
 
         # update parent slack message to say complete, reply with total time, and remove the beach ball loading reaction
-        slack_functions.updateMsg(f"Transcode of {rawtrnc} completed! :party_parrot:", ts)
-        slack_functions.sendReplyMsg(f'Completed in {totalTime} seconds!', ts)
-        slack_functions.removeReact('beachball', ts)
-        
-        logging.info(f'DONE! Transcode of {rawtrnc} completed in {totalTime} seconds!')
+        slack_functions.update_msg(
+            f"Transcode of {rawtrnc} completed! :party_parrot:", timestamp
+        )
+        slack_functions.send_reply_message(
+            f"Completed in {total_time} seconds!", timestamp
+        )
+        slack_functions.remove_react("beachball", timestamp)
+
+        logging.info(
+            "DONE! Transcode of %s completed in %d seconds!", rawtrnc, total_time
+        )
 
         # move old file out of directory into postProcessBAK folder
-        moveToPath = f"{path}/OLDFILE_"+rawtrnc+".mkv"
+        move_to_path = f"{PATH}/OLDFILE_" + rawtrnc + FILE_FORMAT
         try:
-            os.rename(filename, moveToPath)
-        except Exception as e:
-            slack_functions.errorOcurred(e)
+            os.rename(filename, move_to_path)
+            logging.info("Non-transcoded file renamed to %s", move_to_path)
+        except OSError as exception:
+            slack_functions.error_ocurred(exception, timestamp)
 
-        slack_functions.sendReplyMsg(f"Non-transcoded file renamed to {moveToPath}", ts)
-        slack_functions.addReact('white_check_mark', ts)
+        slack_functions.send_reply_message(
+            f"Non-transcoded file renamed to {move_to_path}", timestamp
+        )
+        slack_functions.add_react("white_check_mark", timestamp)
 
 
 def main():
+    """main method"""
     configure()
     check_path()
     get_files()
